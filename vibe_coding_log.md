@@ -137,3 +137,7 @@ leaks Report Version: 4.0, multi-line stacks
 Process 12961: 193 nodes malloced for 22 KB
 Process 12961: 0 leaks for 0 total leaked bytes.
 
+
+
+**ASAN run output (post-Xcode update)**
+==13821==AddressSanitizer: detect_leaks is not supported on this platform.
