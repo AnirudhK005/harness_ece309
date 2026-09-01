@@ -52,6 +52,22 @@ int main(void) {
     char history[HISTORY_SIZE][MAX_LEN]; /* circular buffer of last 5 inputs */
     int hist_idx = 0; /* next position to write */
     int hist_count = 0; /* how many entries currently stored (max 5) */
+    int iteration = 1; /* iteration counter for logging */
+
+    /* Write initial architecture/decision log header so the log contains
+     * the AI's architectural decisions and format expectations. Open in
+     * write mode to reset previous contents when program starts.
+     */
+    FILE *archf = fopen("vibe_coding_log.md", "w");
+    if (archf) {
+        fprintf(archf, "# Vibe Coding Log\n\n");
+        fprintf(archf, "Architecture: simple CLI in C.\n");
+        fprintf(archf, "- Input method: fgets, max %d chars.\n", MAX_LEN-1);
+        fprintf(archf, "- History: circular buffer history[%d][%d], stores last 5 user turns.\n", HISTORY_SIZE, MAX_LEN);
+        fprintf(archf, "- Precedence: math (entire input) -> hello (contains) -> history (exact) -> echo.\n");
+        fprintf(archf, "- Math operators supported: + - * / %% ^ (%% uses fmod).\n\n");
+        fclose(archf);
+    }
 
     /* Main loop: run forever until user types "exit" */
     while (1) {
@@ -69,17 +85,15 @@ int main(void) {
         /* Remove trailing newline(s) */
         chomp(buf);
 
-        /* Save the raw user input into history (circular) */
-        strncpy(history[hist_idx], buf, MAX_LEN-1);
-        history[hist_idx][MAX_LEN-1] = '\0';
-        hist_idx = (hist_idx + 1) % HISTORY_SIZE;
-        if (hist_count < HISTORY_SIZE) hist_count++;
-
         /* If user typed exactly "exit", break the loop and end program */
         if (strcmp(buf, "exit") == 0) {
+            /* Log this final turn with decision "exit" */
             FILE *logf = fopen("vibe_coding_log.md", "a");
             if (logf) {
-                fprintf(logf, "User: %s\nProgram: %s\n\n", buf, "Program exiting.");
+                fprintf(logf, "Iteration: %d\n", iteration);
+                fprintf(logf, "User: %s\n", buf);
+                fprintf(logf, "Decision: exit\n");
+                fprintf(logf, "Program: Program exiting.\n\n");
                 fclose(logf);
             }
             puts("Exiting...");
@@ -110,11 +124,14 @@ int main(void) {
             }
         }
 
-        /* Prepare response string to echo or print result */
+        /* Prepare response string to echo or print result. Also record decision for logging. */
         char response[MAX_LEN];
+        char decision[MAX_LEN];
         if (is_math) {
-            /* Print numeric result with reasonable formatting */
+            /* Math has highest precedence when the entire input matches */
             snprintf(response, MAX_LEN, "Result: %.10g", result);
+            strncpy(decision, "math", MAX_LEN-1);
+            decision[MAX_LEN-1] = '\0';
             puts(response);
         } else {
             /* Not a pure math expression; check for "hello" (case-insensitive) */
@@ -126,20 +143,56 @@ int main(void) {
                 /* Hardcoded greeting */
                 strncpy(response, "Hello! Nice to meet you.", MAX_LEN-1);
                 response[MAX_LEN-1] = '\0';
+                strncpy(decision, "hello", MAX_LEN-1);
+                decision[MAX_LEN-1] = '\0';
                 puts(response);
+            } else if (strcmp(lower, "history") == 0) {
+                /* History command has lower precedence than hello but higher than echo.
+                 * Print the stored history (oldest -> newest). Note: history entries
+                 * are the last stored user inputs and we store the current input
+                 * after processing, so printing here excludes the current 'history' command.
+                 */
+                strncpy(decision, "history", MAX_LEN-1);
+                decision[MAX_LEN-1] = '\0';
+                if (hist_count == 0) {
+                    puts("History is empty.");
+                } else {
+                    printf("History (oldest->newest):\n");
+                    int oldest = (hist_idx - hist_count + HISTORY_SIZE) % HISTORY_SIZE;
+                    for (int i = 0; i < hist_count; i++) {
+                        int idx = (oldest + i) % HISTORY_SIZE;
+                        printf("- %s\n", history[idx]);
+                    }
+                }
+                snprintf(response, MAX_LEN, "Printed %d history entries.", hist_count);
             } else {
                 /* Default: echo the user's input */
                 snprintf(response, MAX_LEN, "You said: %s", buf);
+                strncpy(decision, "echo", MAX_LEN-1);
+                decision[MAX_LEN-1] = '\0';
                 puts(response);
             }
         }
 
-        /* Append this interaction to the log file */
+        /* Append this interaction to the log file with iteration and decision info */
         FILE *logf = fopen("vibe_coding_log.md", "a");
         if (logf) {
-            fprintf(logf, "User: %s\nProgram: %s\n\n", buf, response);
+            fprintf(logf, "Iteration: %d\n", iteration);
+            fprintf(logf, "User: %s\n", buf);
+            fprintf(logf, "Decision: %s\n", decision);
+            fprintf(logf, "Program: %s\n\n", response);
             fclose(logf);
         }
+
+        /* Now store the user input into history (circular). We store after processing
+         * so that the 'history' command prints prior turns and does not include itself.
+         */
+        strncpy(history[hist_idx], buf, MAX_LEN-1);
+        history[hist_idx][MAX_LEN-1] = '\0';
+        hist_idx = (hist_idx + 1) % HISTORY_SIZE;
+        if (hist_count < HISTORY_SIZE) hist_count++;
+
+        iteration++;
     }
 
     return 0;
