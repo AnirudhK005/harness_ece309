@@ -145,3 +145,32 @@ echo "History check passed. Last 5 turns (oldest->newest):"
 for x in "${last5[@]}"; do echo "- $x"; done
 
 echo "ALL TESTS PASSED"
+
+echo "\nRunning memory-leak checks (AddressSanitizer preferred, fallback to valgrind if available)..."
+
+# Attempt AddressSanitizer build and run
+ASAN_BIN=./harness_asan
+if gcc -fsanitize=address -g -O1 -lm -o "$ASAN_BIN" harness.c 2>/tmp/asan_build.txt; then
+  echo "ASAN build succeeded; running ASAN check..."
+  # Run ASAN build with same inputs; capture stderr for sanitizer output
+  if "$ASAN_BIN" < /tmp/harness_inputs.txt > /tmp/harness_asan_out.txt 2> /tmp/harness_asan_err.txt; then
+    echo "ASAN run completed with no runtime error." > /tmp/harness_asan_status.txt
+  else
+    echo "ASAN reported errors; see /tmp/harness_asan_err.txt" > /tmp/harness_asan_status.txt
+  fi
+  # Append ASAN results to log
+  echo "Memory-leak check (ASAN) output:" >> vibe_coding_log.md
+  sed -n '1,200p' /tmp/harness_asan_err.txt >> vibe_coding_log.md || true
+else
+  echo "ASAN build failed or not available; checking for valgrind..."
+  if command -v valgrind >/dev/null 2>&1; then
+    echo "valgrind found; running valgrind leak check..."
+    valgrind --leak-check=full --error-exitcode=1 --log-file=/tmp/harness_valgrind.txt ./harness < /tmp/harness_inputs.txt > /tmp/harness_valgrind_out.txt 2>&1 || true
+    echo "Memory-leak check (valgrind) output:" >> vibe_coding_log.md
+    sed -n '1,200p' /tmp/harness_valgrind.txt >> vibe_coding_log.md || true
+  else
+    echo "No ASAN or valgrind available; skipping automated leak check." >> vibe_coding_log.md
+  fi
+fi
+
+echo "Memory-leak checks complete."
