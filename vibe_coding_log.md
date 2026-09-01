@@ -147,3 +147,6 @@ Below is a concise, chronological series of iterations. Each iteration lists wha
 
 **ASAN fallback run (no valgrind available)**
 zsh: command not found: timeout
+
+
+**Valgrind leak-check output**
