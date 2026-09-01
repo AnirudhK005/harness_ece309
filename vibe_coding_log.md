@@ -124,25 +124,26 @@ Below is a concise, chronological series of iterations. Each iteration lists wha
 	- Updated the test script to include combined cases (`hello 2 + 3`, `2 + 3 hello`, `2 + 3 is nice`) to verify precedence rules (math-only must be entire input; otherwise `hello` wins when present; math with extra text should not be evaluated).
 	- Verified that the program and test script pass on macOS and Linux-compatible shells.
 
-	### Iteration 6
+### Iteration 6
 
-	- Rename and relabel log sections:
-		- Renamed the `AI Responses and Actions (summary)` section to `Iterations` and relabeled the numbered summaries as `Iteration 1` through `Iteration 5`.
-		- Removed the duplicate recorded-iterations block to avoid redundancy.
-		- Committed and pushed the updated `vibe_coding_log.md`.
+- Rename and relabel log sections:
+	- Renamed the `AI Responses and Actions (summary)` section to `Iterations` and relabeled the numbered summaries as `Iteration 1` through `Iteration 5`.
+	- Removed the duplicate recorded-iterations block to avoid redundancy.
+	- Committed and pushed the updated `vibe_coding_log.md`.
 
-	### Iteration 7
+### Iteration 7
 
-	- Clarify history storage and add memory-leak checks:
-		- Updated `vibe_coding_log.md` to state that the program stores the current input into the circular history after processing, so `history` does in fact store itself as an entry (it is not printed by the `history` invocation that caused it).
-		- Updated `scripts/test_harness.sh` to attempt AddressSanitizer builds and, if unavailable, fall back to `valgrind`. The script appends sanitizer/valgrind output to `vibe_coding_log.md` when run.
-		- Ran the updated test script; tests passed and the leak-check logic executed. Committed and pushed the test script and log updates.
+- Clarify history storage and add memory-leak checks:
+	- Updated `vibe_coding_log.md` to state that the program stores the current input into the circular history after processing, so `history` does in fact store itself as an entry (it is not printed by the `history` invocation that caused it).
+	- Updated `scripts/test_harness.sh` to attempt AddressSanitizer builds and, if unavailable, fall back to `valgrind`. The script appends sanitizer/valgrind output to `vibe_coding_log.md` when run.
+	- Ran the updated test script; tests passed and the leak-check logic executed. Committed and pushed the test script and log updates.
 
-	### Iteration 8
+### Iteration 8
 
-	- User rejected earlier edits and requested corrections:
-		- After the user's rejection, corrected Iteration 4 wording to explicitly say history stores itself after processing, added the Memory-leak testing note to the log, and appended the recent verbatim prompts and AI-action summaries to the file.
-		- Committed and pushed the corrected log file.
+- User rejected earlier edits and requested corrections:
+	- After the user's rejection, corrected Iteration 4 wording to explicitly say history stores itself after processing, added the Memory-leak testing note to the log, and appended the recent verbatim prompts and AI-action summaries to the file.
+	- Committed and pushed the corrected log file.
 
 
-
+**ASAN fallback run (no valgrind available)**
+zsh: command not found: timeout
