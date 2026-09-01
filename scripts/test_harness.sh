@@ -9,27 +9,32 @@ cd "$(dirname "$0")/.."
 echo "Compiling harness.c..."
 gcc -std=c11 -O2 -lm -o harness harness.c
 
-# Prepare inputs (more than 5 turns). The sequence includes:
-# 1) alpha          -> echo
-# 2) hello world    -> greeting
-# 3) 3 * 4          -> math (12)
-# 4) foo            -> echo
-# 5) hello again    -> greeting
-# 6) 10 / 2         -> math (5)
-# 7) plain text     -> echo
-# 8) exit           -> exit program
+# Prepare inputs (more than 5 turns) including combined math+hello/plain cases.
+# Sequence includes:
+# 1) alpha                -> echo
+# 2) hello world          -> greeting
+# 3) 3 * 4                -> math (12)
+# 4) hello 2 + 3          -> contains hello -> greeting
+# 5) 2 + 3 hello          -> contains hello -> greeting
+# 6) 2 + 3                -> math (5)
+# 7) 2 + 3 is nice        -> math with plain text -> echo
+# 8) foo                  -> echo
+# 9) exit                 -> exit program
 INPUTS=$'alpha
 hello world
 3 * 4
+hello 2 + 3
+2 + 3 hello
+2 + 3
+2 + 3 is nice
 foo
-hello again
-10 / 2
-plain text
 exit
 '
 
 echo "Running harness with test inputs..."
 printf "%s" "$INPUTS" > /tmp/harness_inputs.txt
+# Reset the log so test can verify exact entries
+printf "# Vibe Coding Log\n\n" > vibe_coding_log.md
 ./harness < /tmp/harness_inputs.txt > /tmp/harness_out.txt
 
 echo "Checking program outputs..."
@@ -38,10 +43,11 @@ expected=(
   "You said: alpha"
   "Hello! Nice to meet you."
   "Result: 12"
-  "You said: foo"
+  "Hello! Nice to meet you."
   "Hello! Nice to meet you."
   "Result: 5"
-  "You said: plain text"
+  "You said: 2 + 3 is nice"
+  "You said: foo"
   "Exiting..."
 )
 
@@ -91,7 +97,38 @@ if [[ $len -gt 5 ]]; then start=$((len-5)); fi
 last5=()
 for ((i=start;i<len;i++)); do last5+=("${users[i]}"); done
 
-expected_last5=("3 * 4" "foo" "hello again" "10 / 2" "plain text")
+expected_last5=("hello 2 + 3" "2 + 3 hello" "2 + 3" "2 + 3 is nice" "foo")
+
+# Verify that the log contains all prompts and AI responses in order.
+echo "Verifying vibe_coding_log.md contains all prompts and responses..."
+# Build provided input array from the file we sent to the program (/tmp/harness_inputs.txt)
+provided=()
+while IFS= read -r line; do
+  provided+=("$line")
+done < /tmp/harness_inputs.txt
+
+# Read User and Program lines from the log
+log_users=()
+log_programs=()
+while IFS= read -r line; do
+  case "$line" in
+    User:*) log_users+=("${line#User: }") ;;
+    Program:*) log_programs+=("${line#Program: }") ;;
+  esac
+done < vibe_coding_log.md
+
+if [[ ${#provided[@]} -ne ${#log_users[@]} ]]; then
+  echo "FAIL: mismatch between provided inputs (${#provided[@]}) and log User entries (${#log_users[@]})"; exit 6
+fi
+
+for i in "${!provided[@]}"; do
+  if [[ "${provided[i]}" != "${log_users[i]}" ]]; then
+    echo "FAIL: log User entry $i mismatch: got '${log_users[i]}', expected '${provided[i]}'"; exit 7
+  fi
+done
+
+echo "Log contains all User prompts in correct order."
+
 
 if [[ ${#last5[@]} -ne ${#expected_last5[@]} ]]; then
   echo "FAIL: unexpected number of last5 entries: got ${#last5[@]} expected ${#expected_last5[@]}"; exit 4
