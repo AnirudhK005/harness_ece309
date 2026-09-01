@@ -53,13 +53,7 @@ Program: Program exiting.
 
 
 
-**ASAN+LSAN run output**
-dyld[12950]: Library not loaded: @rpath/libclang_rt.asan_osx_dynamic.dylib
-  Referenced from: <0D3276C1-346F-3EDB-9B88-6F171206858C> /Users/anirudhkopparthi/harness_ece309/harness_asan
-  Reason: tried: '/Users/anirudhkopparthi/harness_ece309/libclang_rt.asan_osx_dynamic.dylib' (no such file), '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib' (no such file), '/Users/anirudhkopparthi/harness_ece309/libclang_rt.asan_osx_dynamic.dylib' (no such file), '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/lib/darwin/libclang_rt.asan_osx_dynamic.dylib' (no such file)
-
-
-**leaks --atExit output**
+**leaks --atExit re-run output**
 > You said: alpha
 > Hello! Nice to meet you.
 > Result: 12
@@ -69,38 +63,38 @@ dyld[12950]: Library not loaded: @rpath/libclang_rt.asan_osx_dynamic.dylib
 > You said: 2 + 3 is nice
 > You said: foo
 > Exiting...
-Process 12953 is not debuggable. Due to security restrictions, leaks can only show or save contents of readonly memory of restricted processes.
+Process 14907 is not debuggable. Due to security restrictions, leaks can only show or save contents of readonly memory of restricted processes.
 
-Process:         harness [12953]
+Process:         harness [14907]
 Path:            /Users/USER/*/harness
-Load Address:    0x104114000
+Load Address:    0x100694000
 Identifier:      harness
 Version:         0
 Code Type:       ARM64
 Platform:        macOS
-Parent Process:  leaks [12952]
+Parent Process:  leaks [14906]
 Target Type:     live task
 
-Date/Time:       2026-09-01 17:32:43.549 -0400
-Launch Time:     2026-09-01 17:32:43.241 -0400
+Date/Time:       2026-09-01 17:38:16.716 -0400
+Launch Time:     2026-09-01 17:38:16.395 -0400
 OS Version:      macOS 26.5.2 (25F84)
 Report Version:  7
 Analysis Tool:   /usr/bin/leaks
 
-Physical footprint:         2320K
-Physical footprint (peak):  2320K
+Physical footprint:         2256K
+Physical footprint (peak):  2256K
 Idle exit:                  untracked
 ----
 
 leaks Report Version: 4.0, multi-line stacks
-Process 12953: 193 nodes malloced for 22 KB
-Process 12953: 0 leaks for 0 total leaked bytes.
+Process 14907: 193 nodes malloced for 22 KB
+Process 14907: 0 leaks for 0 total leaked bytes.
 
 
 
-**MallocStackLogging leaks output**
-leaks(12960) MallocStackLogging: could not tag MSL-related memory as no_footprint, so those pages will be included in process footprint - No such file or directory (2)
-leaks(12960) MallocStackLogging: recording malloc (and VM allocation) stacks using lite mode
+**MallocStackLogging re-run output**
+leaks(14911) MallocStackLogging: could not tag MSL-related memory as no_footprint, so those pages will be included in process footprint - No such file or directory (2)
+leaks(14911) MallocStackLogging: recording malloc (and VM allocation) stacks using lite mode
 > You said: alpha
 > Hello! Nice to meet you.
 > Result: 12
@@ -110,34 +104,30 @@ leaks(12960) MallocStackLogging: recording malloc (and VM allocation) stacks usi
 > You said: 2 + 3 is nice
 > You said: foo
 > Exiting...
-Process 12961 is not debuggable. Due to security restrictions, leaks can only show or save contents of readonly memory of restricted processes.
+Process 14912 is not debuggable. Due to security restrictions, leaks can only show or save contents of readonly memory of restricted processes.
 
-Process:         harness [12961]
+Process:         harness [14912]
 Path:            /Users/USER/*/harness
-Load Address:    0x102520000
+Load Address:    0x102230000
 Identifier:      harness
 Version:         0
 Code Type:       ARM64
 Platform:        macOS
-Parent Process:  leaks [12960]
+Parent Process:  leaks [14911]
 Target Type:     live task
 
-Date/Time:       2026-09-01 17:32:44.965 -0400
-Launch Time:     2026-09-01 17:32:44.956 -0400
+Date/Time:       2026-09-01 17:38:17.418 -0400
+Launch Time:     2026-09-01 17:38:17.410 -0400
 OS Version:      macOS 26.5.2 (25F84)
 Report Version:  7
 Analysis Tool:   /usr/bin/leaks
 
-Physical footprint:         2304K
-Physical footprint (peak):  2304K
+Physical footprint:         2256K
+Physical footprint (peak):  2256K
 Idle exit:                  untracked
 ----
 
 leaks Report Version: 4.0, multi-line stacks
-Process 12961: 193 nodes malloced for 22 KB
-Process 12961: 0 leaks for 0 total leaked bytes.
+Process 14912: 193 nodes malloced for 22 KB
+Process 14912: 0 leaks for 0 total leaked bytes.
 
-
-
-**ASAN run output (post-Xcode update)**
-==13821==AddressSanitizer: detect_leaks is not supported on this platform.
