@@ -146,21 +146,76 @@ for x in "${last5[@]}"; do echo "- $x"; done
 
 echo "ALL TESTS PASSED"
 
-echo "\nRunning memory-leak checks (AddressSanitizer preferred, fallback to valgrind if available)..."
+echo "\nRunning memory-leak checks (AddressSanitizer preferred, fallback to valgrind, then leaks)..."
+
+# Helper: run macOS `leaks` and MallocStackLogging fallback, append outputs and report status
+run_leaks_fallback() {
+  echo "Running macOS 'leaks --atExit' fallback..."
+  leaks --atExit -- ./harness < /tmp/harness_inputs.txt > /tmp/harness_leaks_fallback.txt 2>&1 || true
+  MallocStackLogging=1 leaks --atExit -- ./harness < /tmp/harness_inputs.txt > /tmp/harness_mallocstack_fallback.txt 2>&1 || true
+
+  # Append to log
+  echo "Memory-leak check (leaks fallback) output:" >> vibe_coding_log.md
+  sed -n '1,200p' /tmp/harness_leaks_fallback.txt >> vibe_coding_log.md || true
+  echo "Memory-leak check (leaks MallocStackLogging) output:" >> vibe_coding_log.md
+  sed -n '1,200p' /tmp/harness_mallocstack_fallback.txt >> vibe_coding_log.md || true
+
+  # Determine completion vs blocked status
+  if grep -qi "not debuggable" /tmp/harness_leaks_fallback.txt 2>/dev/null; then
+    echo "LEAKS: blocked by macOS security (process not debuggable)"
+    echo "LEAKS_STATUS: blocked" > /tmp/harness_leaks_status.txt
+  else
+    echo "LEAKS: completed"
+    echo "LEAKS_STATUS: completed" > /tmp/harness_leaks_status.txt
+  fi
+}
 
 # Attempt AddressSanitizer build and run
 ASAN_BIN=./harness_asan
 if gcc -fsanitize=address -g -O1 -lm -o "$ASAN_BIN" harness.c 2>/tmp/asan_build.txt; then
-  echo "ASAN build succeeded; running ASAN check..."
-  # Run ASAN build with same inputs; capture stderr for sanitizer output
-  if "$ASAN_BIN" < /tmp/harness_inputs.txt > /tmp/harness_asan_out.txt 2> /tmp/harness_asan_err.txt; then
-    echo "ASAN run completed with no runtime error." > /tmp/harness_asan_status.txt
+  echo "ASAN build succeeded; running ASAN check with timeout watchdog..."
+  "$ASAN_BIN" < /tmp/harness_inputs.txt > /tmp/harness_asan_out.txt 2> /tmp/harness_asan_err.txt &
+  asan_pid=$!
+  watchdog=8
+  for i in $(seq 1 $watchdog); do
+    if ! kill -0 "$asan_pid" 2>/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+  if kill -0 "$asan_pid" 2>/dev/null; then
+    kill -9 "$asan_pid" 2>/dev/null || true
+    echo "ASAN run timed out after ${watchdog}s" > /tmp/harness_asan_status.txt
   else
-    echo "ASAN reported errors; see /tmp/harness_asan_err.txt" > /tmp/harness_asan_status.txt
+    wait "$asan_pid" 2>/dev/null || true
+    exitcode=$?
+    if [[ $exitcode -eq 0 ]]; then
+      echo "ASAN run completed with no runtime error." > /tmp/harness_asan_status.txt
+    else
+      echo "ASAN reported errors; exitcode $exitcode" > /tmp/harness_asan_status.txt
+    fi
   fi
-  # Append ASAN results to log
-  echo "Memory-leak check (ASAN) output:" >> vibe_coding_log.md
+
+  echo "Memory-leak check (ASAN) stderr output:" >> vibe_coding_log.md
   sed -n '1,200p' /tmp/harness_asan_err.txt >> vibe_coding_log.md || true
+  echo "Memory-leak check (ASAN) status:" >> vibe_coding_log.md
+  sed -n '1,200p' /tmp/harness_asan_status.txt >> vibe_coding_log.md || true
+
+  # If ASAN timed out/reported errors, attempt valgrind; if valgrind not present, run leaks fallback
+  if [ -f /tmp/harness_asan_status.txt ]; then
+    status_text=$(cat /tmp/harness_asan_status.txt)
+    if echo "$status_text" | grep -iqE "timed out|reported errors|error"; then
+      if command -v valgrind >/dev/null 2>&1; then
+        echo "ASAN timed out/reported errors; running valgrind fallback..." >> vibe_coding_log.md
+        valgrind --leak-check=full --log-file=/tmp/harness_valgrind.txt ./harness < /tmp/harness_inputs.txt > /tmp/harness_valgrind_out.txt 2>&1 || true
+        echo "Memory-leak check (valgrind) output:" >> vibe_coding_log.md
+        sed -n '1,200p' /tmp/harness_valgrind.txt >> vibe_coding_log.md || true
+      else
+        echo "Valgrind not available; running macOS leaks fallback..."
+        run_leaks_fallback
+      fi
+    fi
+  fi
 else
   echo "ASAN build failed or not available; checking for valgrind..."
   if command -v valgrind >/dev/null 2>&1; then
@@ -169,7 +224,8 @@ else
     echo "Memory-leak check (valgrind) output:" >> vibe_coding_log.md
     sed -n '1,200p' /tmp/harness_valgrind.txt >> vibe_coding_log.md || true
   else
-    echo "No ASAN or valgrind available; skipping automated leak check." >> vibe_coding_log.md
+    echo "No ASAN or valgrind available; running macOS leaks fallback..."
+    run_leaks_fallback
   fi
 fi
 
