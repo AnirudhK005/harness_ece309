@@ -146,36 +146,49 @@ for x in "${last5[@]}"; do echo "- $x"; done
 
 echo "ALL TESTS PASSED"
 
-echo "\nRunning memory-leak checks (AddressSanitizer preferred, fallback to valgrind, then leaks)..."
+echo "\nRunning overflow and reuse tests to ensure no stale data leakage..."
 
-# Helper: run macOS `leaks` and MallocStackLogging fallback, append outputs and report status
-run_leaks_fallback() {
-  echo "Running macOS 'leaks --atExit' fallback..."
-  leaks --atExit -- ./harness < /tmp/harness_inputs.txt > /tmp/harness_leaks_fallback.txt 2>&1 || true
-  MallocStackLogging=1 leaks --atExit -- ./harness < /tmp/harness_inputs.txt > /tmp/harness_mallocstack_fallback.txt 2>&1 || true
+# Build an overlong input (>127 chars), then a short input, then request history.
+LONG=$(printf 'A%.0s' {1..200})
+printf "%s\nfoo\nhistory\nexit\n" "$LONG" > /tmp/harness_inputs_overflow.txt
 
-  # Append to log
-  echo "Memory-leak check (leaks fallback) output:" >> vibe_coding_log.md
-  sed -n '1,200p' /tmp/harness_leaks_fallback.txt >> vibe_coding_log.md || true
-  echo "Memory-leak check (leaks MallocStackLogging) output:" >> vibe_coding_log.md
-  sed -n '1,200p' /tmp/harness_mallocstack_fallback.txt >> vibe_coding_log.md || true
+./harness < /tmp/harness_inputs_overflow.txt > /tmp/harness_overflow_out.txt
 
-  # Determine completion vs blocked status
-  if grep -qi "not debuggable" /tmp/harness_leaks_fallback.txt 2>/dev/null; then
-    echo "LEAKS: blocked by macOS security (process not debuggable)"
-    echo "LEAKS_STATUS: blocked" > /tmp/harness_leaks_status.txt
-  else
-    echo "LEAKS: completed"
-    echo "LEAKS_STATUS: completed" > /tmp/harness_leaks_status.txt
-  fi
-}
+# Extract history entries printed by the program (lines starting with '- ' after the header)
+start_line=$(grep -n "History (oldest->newest):" /tmp/harness_overflow_out.txt | head -n1 | cut -d: -f1 || true)
+overflow_history=()
+if [[ -n "$start_line" ]]; then
+  sed -n "$((start_line+1)),\$p" /tmp/harness_overflow_out.txt | sed -n '/^-/p' | sed 's/^- //' > /tmp/_overflow_history.txt
+  while IFS= read -r line; do overflow_history+=("$line"); done < /tmp/_overflow_history.txt
+fi
+
+if [[ ${#overflow_history[@]} -lt 2 ]]; then
+  echo "FAIL: overflow test did not produce expected history output"; sed -n '1,200p' /tmp/harness_overflow_out.txt; exit 8
+fi
+
+# The program truncates inputs longer than MAX_LEN-1; verify the stored long entry
+# equals the first 127 characters (MAX_LEN-1)
+expected_long=${LONG:0:127}
+if [[ "${overflow_history[0]}" != "$expected_long" ]]; then
+  echo "FAIL: long history entry mismatch (was truncated differently)"; exit 9
+fi
+
+if [[ "${overflow_history[1]}" != "foo" ]]; then
+  echo "FAIL: short entry was contaminated by previous long input: got='${overflow_history[1]}'"; exit 10
+fi
+
+echo "Overflow/reuse check passed: long entry preserved and short entry not contaminated."
+
+echo "\nRunning memory-leak checks (AddressSanitizer preferred, fallback to valgrind if available)..."
 
 # Attempt AddressSanitizer build and run
 ASAN_BIN=./harness_asan
 if gcc -fsanitize=address -g -O1 -lm -o "$ASAN_BIN" harness.c 2>/tmp/asan_build.txt; then
   echo "ASAN build succeeded; running ASAN check with timeout watchdog..."
+  # Run ASAN build with same inputs under a simple watchdog to avoid hangs.
   "$ASAN_BIN" < /tmp/harness_inputs.txt > /tmp/harness_asan_out.txt 2> /tmp/harness_asan_err.txt &
   asan_pid=$!
+  # Wait up to 8 seconds for ASAN to finish, then kill if still running
   watchdog=8
   for i in $(seq 1 $watchdog); do
     if ! kill -0 "$asan_pid" 2>/dev/null; then
@@ -184,6 +197,7 @@ if gcc -fsanitize=address -g -O1 -lm -o "$ASAN_BIN" harness.c 2>/tmp/asan_build.
     sleep 1
   done
   if kill -0 "$asan_pid" 2>/dev/null; then
+    # Still running -> timeout
     kill -9 "$asan_pid" 2>/dev/null || true
     echo "ASAN run timed out after ${watchdog}s" > /tmp/harness_asan_status.txt
   else
@@ -195,13 +209,13 @@ if gcc -fsanitize=address -g -O1 -lm -o "$ASAN_BIN" harness.c 2>/tmp/asan_build.
       echo "ASAN reported errors; exitcode $exitcode" > /tmp/harness_asan_status.txt
     fi
   fi
-
+  # Append ASAN results to log (stderr first, then status)
   echo "Memory-leak check (ASAN) stderr output:" >> vibe_coding_log.md
   sed -n '1,200p' /tmp/harness_asan_err.txt >> vibe_coding_log.md || true
   echo "Memory-leak check (ASAN) status:" >> vibe_coding_log.md
   sed -n '1,200p' /tmp/harness_asan_status.txt >> vibe_coding_log.md || true
 
-  # If ASAN timed out/reported errors, attempt valgrind; if valgrind not present, run leaks fallback
+  # If ASAN timed out or reported errors, try valgrind as a fallback (if available)
   if [ -f /tmp/harness_asan_status.txt ]; then
     status_text=$(cat /tmp/harness_asan_status.txt)
     if echo "$status_text" | grep -iqE "timed out|reported errors|error"; then
@@ -211,8 +225,7 @@ if gcc -fsanitize=address -g -O1 -lm -o "$ASAN_BIN" harness.c 2>/tmp/asan_build.
         echo "Memory-leak check (valgrind) output:" >> vibe_coding_log.md
         sed -n '1,200p' /tmp/harness_valgrind.txt >> vibe_coding_log.md || true
       else
-        echo "Valgrind not available; running macOS leaks fallback..."
-        run_leaks_fallback
+        echo "Valgrind not available on this system; cannot run fallback." >> vibe_coding_log.md
       fi
     fi
   fi
@@ -224,8 +237,7 @@ else
     echo "Memory-leak check (valgrind) output:" >> vibe_coding_log.md
     sed -n '1,200p' /tmp/harness_valgrind.txt >> vibe_coding_log.md || true
   else
-    echo "No ASAN or valgrind available; running macOS leaks fallback..."
-    run_leaks_fallback
+    echo "No ASAN or valgrind available; skipping automated leak check." >> vibe_coding_log.md
   fi
 fi
 

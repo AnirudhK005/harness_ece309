@@ -47,6 +47,14 @@ static void chomp(char *s) {
     }
 }
 
+/* Securely zero memory to avoid leftover data being observable.
+ * Uses a volatile pointer to prevent the optimizer from removing the clear.
+ */
+static void secure_zero(void *p, size_t n) {
+    volatile unsigned char *q = (volatile unsigned char *)p;
+    while (n--) *q++ = 0;
+}
+
 int main(void) {
     char buf[MAX_LEN];
     char history[HISTORY_SIZE][MAX_LEN]; /* circular buffer of last 5 inputs */
@@ -82,8 +90,24 @@ int main(void) {
             break;
         }
 
+        /* If the input was longer than our buffer, fgets will not read the
+         * trailing newline. Detect truncation and drain the rest of the line
+         * from stdin to keep the next read in sync. */
+        size_t readlen = strlen(buf);
+        int truncated = 0;
+        if (readlen > 0 && buf[readlen-1] != '\n' && !feof(stdin)) {
+            /* line may be truncated if last char isn't a newline and there
+             * are more bytes pending. Drain until newline or EOF. */
+            int c;
+            truncated = 1;
+            while ((c = getchar()) != EOF && c != '\n') { /* drain */ }
+        }
+
         /* Remove trailing newline(s) */
         chomp(buf);
+
+        /* Always ensure NUL-termination */
+        buf[MAX_LEN-1] = '\0';
 
         /* If user typed exactly "exit", break the loop and end program */
         if (strcmp(buf, "exit") == 0) {
@@ -186,7 +210,11 @@ int main(void) {
 
         /* Now store the user input into history (circular). We store after processing
          * so that the 'history' command prints prior turns and does not include itself.
+         * Zero the target slot first to avoid leftover bytes from previous longer
+         * entries being observable if anything later reads the raw buffer.
          */
+        secure_zero(history[hist_idx], sizeof history[hist_idx]);
+        /* Copy up to MAX_LEN-1 and ensure NUL termination */
         strncpy(history[hist_idx], buf, MAX_LEN-1);
         history[hist_idx][MAX_LEN-1] = '\0';
         hist_idx = (hist_idx + 1) % HISTORY_SIZE;
