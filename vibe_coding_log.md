@@ -249,4 +249,3 @@ Below is a concise, chronological series of iterations. Each iteration lists wha
 - Files changed in this iteration: `harness.c`, `scripts/test_harness.sh` (committed locally in the workspace).
 
 These changes ensure that a fixed-size `char history[5][128]` will not leak prior longer inputs into later shorter entries and that the program correctly truncates overlong inputs while keeping the input stream in sync.
-Valgrind not available on this system; cannot run fallback.
