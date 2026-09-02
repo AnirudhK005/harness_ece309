@@ -7,8 +7,6 @@
 - Input method: `fgets()` with a 127-character input limit (buffer size 128).
 - Conversation history: a circular buffer `char history[5][128]` storing the last 5 user turns.
 - Precedence (applied in this order):
-
-- Precedence (applied in this order):
 	1. `exit` — the input must be exactly `exit` (isolated) to terminate the program.
 	2. Math detection — the entire input must be a binary expression `number operator number` to be evaluated.
 	3. `hello` detection — case-insensitive substring match.
@@ -224,15 +222,15 @@ Below is a concise, chronological series of iterations. Each iteration lists wha
 
 ### Iteration 13
 
-- Codesign attempts to enable debugger access for `leaks` and Instruments:
-	- Created `entitlements.plist` with `get-task-allow` set to true to request a debuggable ad-hoc signature.
-	- Ran ad-hoc codesign: `codesign --force --sign - --entitlements entitlements.plist ./harness` and inspected the signature with `codesign -dvvv ./harness`.
-	- After codesigning, re-ran `leaks --atExit` and `MallocStackLogging=1 leaks --atExit` against the signed binary to attempt richer stack capture.
-	- Observed mixed results: ad-hoc codesign sometimes allowed `leaks` to run and report totals, but macOS security still produced "Couldn't get task port"/"Process ... is not debuggable" in some runs. Documented the exact `codesign` output and `leaks` messages in the diagnostics section of the log.
+- Reran `leaks --atExit` and `MallocStackLogging=1 leaks --atExit` to check for leaks without `valgrind`/ASAN leak support. Both tools ran and reported `0 leaks for 0 total leaked bytes` for the provided test inputs. macOS security restrictions produced `Process ... is not debuggable` notices which limited detailed stack dumps. Appended the `leaks` and MallocStackLogging outputs to the diagnostics section.
 
 ### Iteration 14
 
-- Reran `leaks --atExit` and `MallocStackLogging=1 leaks --atExit` to check for leaks without `valgrind`/ASAN leak support. Both tools ran and reported `0 leaks for 0 total leaked bytes` for the provided test inputs. macOS security restrictions produced `Process ... is not debuggable` notices which limited detailed stack dumps. Appended the `leaks` and MallocStackLogging outputs to the diagnostics section.
+- Codesign attempts to enable debugger access for `leaks` and Instruments:
+ 	- Created `entitlements.plist` with `get-task-allow` set to true to request a debuggable ad-hoc signature.
+ 	- Ran ad-hoc codesign: `codesign --force --sign - --entitlements entitlements.plist ./harness` and inspected the signature with `codesign -dvvv ./harness`.
+ 	- After codesigning, re-ran `leaks --atExit` and `MallocStackLogging=1 leaks --atExit` against the signed binary to attempt richer stack capture.
+ 	- Observed mixed results: ad-hoc codesign sometimes allowed `leaks` to run and report totals, but macOS security still produced "Couldn't get task port"/"Process ... is not debuggable" in some runs. Documented the exact `codesign` output and `leaks` messages in the diagnostics section of the log.
 
 ### Iteration 15
 
