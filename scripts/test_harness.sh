@@ -28,13 +28,12 @@ hello 2 + 3
 2 + 3
 2 + 3 is nice
 foo
+history
 exit
 '
 
 echo "Running harness with test inputs..."
 printf "%s" "$INPUTS" > /tmp/harness_inputs.txt
-# Reset the log so test can verify exact entries
-printf "# Vibe Coding Log\n\n" > vibe_coding_log.md
 ./harness < /tmp/harness_inputs.txt > /tmp/harness_out.txt
 
 echo "Checking program outputs..."
@@ -70,65 +69,35 @@ fi
 
 echo "Output checks passed."
 
-echo "Verifying last 5 non-exit User turns in vibe_coding_log.md..."
+echo "Verifying last 5 non-exit User turns via program 'history' output..."
 
-# Extract User lines from the log in a portable way (avoid `mapfile` on older macOS bash)
-grep '^User: ' vibe_coding_log.md | sed 's/^User: //' > /tmp/_harness_users.txt
-users=()
-while IFS= read -r line; do
-  users+=("$line")
-done < /tmp/_harness_users.txt
-
-if [[ ${#users[@]} -eq 0 ]]; then
-  echo "FAIL: no User entries found in vibe_coding_log.md"; exit 3
+# Extract history from the program output (we included a 'history' input before exit)
+start_line=$(grep -n "History (oldest->newest):" /tmp/harness_out.txt | head -n1 | cut -d: -f1 || true)
+history_entries=()
+if [[ -n "$start_line" ]]; then
+  sed -n "$((start_line+1)),\$p" /tmp/harness_out.txt | sed -n '/^-/p' | sed 's/^- //' > /tmp/_harness_history.txt
+  while IFS= read -r line; do history_entries+=("$line"); done < /tmp/_harness_history.txt
 fi
 
-# If the last entry is 'exit', remove it for the purposes of checking the last 5 turns
-len=${#users[@]}
-if [[ $len -gt 0 && "${users[$((len-1))]}" == "exit" ]]; then
-  unset "users[$((len-1))]"
-  len=${#users[@]}
+if [[ ${#history_entries[@]} -eq 0 ]]; then
+  echo "FAIL: no history printed by program"; sed -n '1,200p' /tmp/harness_out.txt; exit 3
+fi
+
+# If the last printed entry is 'exit', remove it for the purposes of checking the last 5 turns
+len=${#history_entries[@]}
+if [[ $len -gt 0 && "${history_entries[$((len-1))]}" == "exit" ]]; then
+  unset "history_entries[$((len-1))]"
+  len=${#history_entries[@]}
 fi
 
 # Take the last 5 entries
-len=${#users[@]}
+len=${#history_entries[@]}
 start=0
 if [[ $len -gt 5 ]]; then start=$((len-5)); fi
 last5=()
-for ((i=start;i<len;i++)); do last5+=("${users[i]}"); done
+for ((i=start;i<len;i++)); do last5+=("${history_entries[i]}"); done
 
 expected_last5=("hello 2 + 3" "2 + 3 hello" "2 + 3" "2 + 3 is nice" "foo")
-
-# Verify that the log contains all prompts and AI responses in order.
-echo "Verifying vibe_coding_log.md contains all prompts and responses..."
-# Build provided input array from the file we sent to the program (/tmp/harness_inputs.txt)
-provided=()
-while IFS= read -r line; do
-  provided+=("$line")
-done < /tmp/harness_inputs.txt
-
-# Read User and Program lines from the log
-log_users=()
-log_programs=()
-while IFS= read -r line; do
-  case "$line" in
-    User:*) log_users+=("${line#User: }") ;;
-    Program:*) log_programs+=("${line#Program: }") ;;
-  esac
-done < vibe_coding_log.md
-
-if [[ ${#provided[@]} -ne ${#log_users[@]} ]]; then
-  echo "FAIL: mismatch between provided inputs (${#provided[@]}) and log User entries (${#log_users[@]})"; exit 6
-fi
-
-for i in "${!provided[@]}"; do
-  if [[ "${provided[i]}" != "${log_users[i]}" ]]; then
-    echo "FAIL: log User entry $i mismatch: got '${log_users[i]}', expected '${provided[i]}'"; exit 7
-  fi
-done
-
-echo "Log contains all User prompts in correct order."
-
 
 if [[ ${#last5[@]} -ne ${#expected_last5[@]} ]]; then
   echo "FAIL: unexpected number of last5 entries: got ${#last5[@]} expected ${#expected_last5[@]}"; exit 4
@@ -209,23 +178,23 @@ if gcc -fsanitize=address -g -O1 -lm -o "$ASAN_BIN" harness.c 2>/tmp/asan_build.
       echo "ASAN reported errors; exitcode $exitcode" > /tmp/harness_asan_status.txt
     fi
   fi
-  # Append ASAN results to log (stderr first, then status)
-  echo "Memory-leak check (ASAN) stderr output:" >> vibe_coding_log.md
-  sed -n '1,200p' /tmp/harness_asan_err.txt >> vibe_coding_log.md || true
-  echo "Memory-leak check (ASAN) status:" >> vibe_coding_log.md
-  sed -n '1,200p' /tmp/harness_asan_status.txt >> vibe_coding_log.md || true
+  # Print ASAN results to console (stderr first, then status)
+  echo "Memory-leak check (ASAN) stderr output:" >&2
+  sed -n '1,200p' /tmp/harness_asan_err.txt >&2 || true
+  echo "Memory-leak check (ASAN) status:" >&2
+  sed -n '1,200p' /tmp/harness_asan_status.txt >&2 || true
 
   # If ASAN timed out or reported errors, try valgrind as a fallback (if available)
   if [ -f /tmp/harness_asan_status.txt ]; then
     status_text=$(cat /tmp/harness_asan_status.txt)
     if echo "$status_text" | grep -iqE "timed out|reported errors|error"; then
       if command -v valgrind >/dev/null 2>&1; then
-        echo "ASAN timed out/reported errors; running valgrind fallback..." >> vibe_coding_log.md
+        echo "ASAN timed out/reported errors; running valgrind fallback..." >&2
         valgrind --leak-check=full --log-file=/tmp/harness_valgrind.txt ./harness < /tmp/harness_inputs.txt > /tmp/harness_valgrind_out.txt 2>&1 || true
-        echo "Memory-leak check (valgrind) output:" >> vibe_coding_log.md
-        sed -n '1,200p' /tmp/harness_valgrind.txt >> vibe_coding_log.md || true
+        echo "Memory-leak check (valgrind) output:" >&2
+        sed -n '1,200p' /tmp/harness_valgrind.txt >&2 || true
       else
-        echo "Valgrind not available on this system; cannot run fallback." >> vibe_coding_log.md
+        echo "Valgrind not available on this system; cannot run fallback." >&2
       fi
     fi
   fi
@@ -234,10 +203,10 @@ else
   if command -v valgrind >/dev/null 2>&1; then
     echo "valgrind found; running valgrind leak check..."
     valgrind --leak-check=full --error-exitcode=1 --log-file=/tmp/harness_valgrind.txt ./harness < /tmp/harness_inputs.txt > /tmp/harness_valgrind_out.txt 2>&1 || true
-    echo "Memory-leak check (valgrind) output:" >> vibe_coding_log.md
-    sed -n '1,200p' /tmp/harness_valgrind.txt >> vibe_coding_log.md || true
+    echo "Memory-leak check (valgrind) output:" >&2
+    sed -n '1,200p' /tmp/harness_valgrind.txt >&2 || true
   else
-    echo "No ASAN or valgrind available; skipping automated leak check." >> vibe_coding_log.md
+    echo "No ASAN or valgrind available; skipping automated leak check." >&2
   fi
 fi
 

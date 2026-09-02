@@ -62,20 +62,9 @@ int main(void) {
     int hist_count = 0; /* how many entries currently stored (max 5) */
     int iteration = 1; /* iteration counter for logging */
 
-    /* Write initial architecture/decision log header so the log contains
-     * the AI's architectural decisions and format expectations. Open in
-     * write mode to reset previous contents when program starts.
-     */
-    FILE *archf = fopen("vibe_coding_log.md", "w");
-    if (archf) {
-        fprintf(archf, "# Vibe Coding Log\n\n");
-        fprintf(archf, "Architecture: simple CLI in C.\n");
-        fprintf(archf, "- Input method: fgets, max %d chars.\n", MAX_LEN-1);
-        fprintf(archf, "- History: circular buffer history[%d][%d], stores last 5 user turns.\n", HISTORY_SIZE, MAX_LEN);
-        fprintf(archf, "- Precedence: math (entire input) -> hello (contains) -> history (exact) -> echo.\n");
-        fprintf(archf, "- Math operators supported: + - * / %% ^ (%% uses fmod).\n\n");
-        fclose(archf);
-    }
+    /* Logging to file removed: `vibe_coding_log.md` is treated as a static
+     * documentation file. All per-interaction logging was intentionally
+     * removed so the CLI no longer writes to disk. */
 
     /* Main loop: run forever until user types "exit" */
     while (1) {
@@ -111,15 +100,6 @@ int main(void) {
 
         /* If user typed exactly "exit", break the loop and end program */
         if (strcmp(buf, "exit") == 0) {
-            /* Log this final turn with decision "exit" */
-            FILE *logf = fopen("vibe_coding_log.md", "a");
-            if (logf) {
-                fprintf(logf, "Iteration: %d\n", iteration);
-                fprintf(logf, "User: %s\n", buf);
-                fprintf(logf, "Decision: exit\n");
-                fprintf(logf, "Program: Program exiting.\n\n");
-                fclose(logf);
-            }
             puts("Exiting...");
             break;
         }
@@ -198,15 +178,8 @@ int main(void) {
             }
         }
 
-        /* Append this interaction to the log file with iteration and decision info */
-        FILE *logf = fopen("vibe_coding_log.md", "a");
-        if (logf) {
-            fprintf(logf, "Iteration: %d\n", iteration);
-            fprintf(logf, "User: %s\n", buf);
-            fprintf(logf, "Decision: %s\n", decision);
-            fprintf(logf, "Program: %s\n\n", response);
-            fclose(logf);
-        }
+        /* Per-interaction file logging removed; the program no longer writes
+         * to `vibe_coding_log.md`. */
 
         /* Now store the user input into history (circular). We store after processing
          * so that the 'history' command prints prior turns and does not include itself.

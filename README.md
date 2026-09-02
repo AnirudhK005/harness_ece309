@@ -4,7 +4,7 @@ Simple C command-line harness for ECE309-style exercises.
 
 Project files
 - `harness.c`: The command-line program that reads user input, evaluates simple math expressions, responds to greetings, echoes inputs, and keeps a 5-turn conversation history.
-- `vibe_coding_log.md`: Conversation and interaction log (appended by the program each turn).
+- `vibe_coding_log.md`: Development and iteration log (static documentation). The program no longer writes to this file; it is maintained manually as a project artifact.
 
 How to build
 
@@ -27,7 +27,9 @@ Behavior
 - If the input contains the word `hello` (case-insensitive), the program prints a hardcoded greeting.
 - Otherwise, the program echoes the user's input back.
 - The program maintains a circular conversation history of the last 5 user inputs in a `char history[5][128]` array.
-- Each interaction (user input and program response) is appended to `vibe_coding_log.md`.
+-- The program does not write to `vibe_coding_log.md`. Diagnostic outputs are printed to the console; the `vibe_coding_log.md` file is a static development log.
 
 Notes
 - The program uses only standard C libraries (`stdio.h`, `string.h`, `ctype.h`, `math.h`) and is intentionally kept simple for beginners.
+
+- Runtime tip: to print the stored conversation turns while the program is running, type `history` (exact input, case-insensitive).
